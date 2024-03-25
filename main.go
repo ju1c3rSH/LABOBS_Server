@@ -56,6 +56,7 @@ func main() {
 	mux.HandleFunc("/", indexHandler)
 	mux.HandleFunc("/add_devices", addHandler)
 	mux.HandleFunc("/update_data", updateData)
+	mux.HandleFunc("/get_device_status", gdcsHandler)
 	fmt.Printf("Server listening on port %d...\n", port)
 	err = http.ListenAndServe(":"+strconv.Itoa(port), mux)
 	if err != nil {
@@ -101,7 +102,67 @@ func createDeviceTable(db *sql.DB) error {
 
 	return nil
 }
+func gdcsHandler(w http.ResponseWriter, r *http.Request) {
+	err := r.ParseForm()
+	if err != nil {
+		http.Error(w, "Failed to parse form data: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	devId := r.Form.Get("dev_id")
+	exceptRows := r.Form.Get("exceptRows")
+	if exceptRows == "" {
+		exceptRows = strconv.Itoa(30)
+	}
+	db, err := sql.Open("mysql", "csgo:213q456qwe@tcp(sincos.icu:22205)/csgo")
+	if err != nil {
+		errorResponse := map[string]interface{}{
+			"error": "Failed to connect to database",
+		}
+		jsonResponse, _ := json.Marshal(errorResponse)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(jsonResponse)
+		return
+	}
+	defer db.Close()
+	query := fmt.Sprintf("SELECT * FROM sensor_data WHERE dev_id = ? LIMIT %d", exceptRows)
+	rows, err := db.Query(query, devId)
+	if err != nil {
+		errorResponse := map[string]interface{}{
+			"msg":    "Failed to get sensor data: " + err.Error(),
+			"status": 405,
+		}
+		jsonResponse, _ := json.Marshal(errorResponse)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write(jsonResponse)
+		return
+	}
 
+	for rows.Next() {
+		var id int
+		var dev_id string
+		var battery int
+		var temp int
+		var attd int
+		var pres int
+		var recordedTime int
+		if err := rows.Scan(&id, &dev_id, &battery, &temp, &attd, &pres, &recordedTime); err != nil {
+			errorResponse := map[string]interface{}{
+				"msg":    "Failed to get sensor data: " + err.Error(),
+				"status": 405,
+			}
+			jsonResponse, _ := json.Marshal(errorResponse)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write(jsonResponse)
+			return
+		}
+
+	}
+	defer rows.Close()
+
+}
 func updateData(w http.ResponseWriter, r *http.Request) {
 	err := r.ParseForm()
 	if err != nil {
@@ -112,7 +173,6 @@ func updateData(w http.ResponseWriter, r *http.Request) {
 	devId := r.Form.Get("dev_id")
 	ComprehensiveData := r.Form.Get("SensorsJson")
 	if devId == "" || ComprehensiveData == "" {
-		// 返回 JSON 错误响应和自定义状态码
 		errorResponse := map[string]interface{}{
 			"msg":    "Please provide dev_id and SensorsJson!",
 			"status": 400,
@@ -140,7 +200,6 @@ func updateData(w http.ResponseWriter, r *http.Request) {
 
 	db, err := sql.Open("mysql", "csgo:213q456qwe@tcp(sincos.icu:22205)/csgo")
 	if err != nil {
-		// 返回 JSON 错误响应和自定义状态码
 		errorResponse := map[string]interface{}{
 			"error": "Failed to connect to database",
 		}
@@ -152,7 +211,6 @@ func updateData(w http.ResponseWriter, r *http.Request) {
 	}
 	defer db.Close()
 
-	// 检查设备是否存在
 	if !ValueExists(db, "device", "dev_id", devId) {
 		errorResponse := map[string]interface{}{
 			"msg":    "Device not found",
