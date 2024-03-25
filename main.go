@@ -86,10 +86,10 @@ func createDeviceTable(db *sql.DB) error {
 		CREATE TABLE IF NOT EXISTS sensor_data (
 			id INT AUTO_INCREMENT PRIMARY KEY,
 			dev_id INT,
-			cur_battery VARCHAR(255),
-			cur_temp VARCHAR(255),
-			cur_attd VARCHAR(255),
-			cur_pres VARCHAR(255),
+			battery INT,
+			temp INT,
+			attd INT,
+			pres INT,
 			recordedTime TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (dev_id) REFERENCES device(dev_id)
 		);
@@ -177,17 +177,68 @@ func updateData(w http.ResponseWriter, r *http.Request) {
 		w.Write(jsonResponse)
 		return
 	}
+	err = UpdateSensorData(db, devId, sensorData)
+	if err != nil {
+		errorResponse := map[string]interface{}{
+			"msg":    "Failed to update device data: " + err.Error(),
+			"status": 500,
+		}
+		jsonResponse, _ := json.Marshal(errorResponse)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(jsonResponse)
+		return
+	}
 
 	successResponse := map[string]interface{}{
-		"status": "success",
-		"data":   sensorData,
+		"status": "200",
+		"msg":    err.Error(),
 	}
 	jsonResponse, _ := json.Marshal(successResponse)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(jsonResponse)
 }
+func UpdateSensorData(db *sql.DB, devId string, updateData SensorData) error {
+	var setValues []string
+	var params []interface{}
 
+	if updateData.CurBattery != "" {
+		setValues = append(setValues, "battery = ?")
+		params = append(params, updateData.CurBattery)
+	}
+	if updateData.CurTemp != "" {
+		setValues = append(setValues, "temp = ?")
+		params = append(params, updateData.CurTemp)
+	}
+	if updateData.CurAttd != "" {
+		setValues = append(setValues, "attd = ?")
+		params = append(params, updateData.CurAttd)
+	}
+	if updateData.CurPres != "" {
+		setValues = append(setValues, "pres = ?")
+		params = append(params, updateData.CurPres)
+	}
+
+	if len(setValues) == 0 {
+		return fmt.Errorf("no fields to update")
+	}
+
+	//build set
+	setClause := "SET " + strings.Join(setValues, ", ")
+
+	//build update
+	query := "UPDATE sensor_data " + setClause + " WHERE dev_id = ?"
+	params = append(params, devId)
+
+	//exec update
+	_, err := db.Exec(query, params...)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
 func UpdateDeviceData(db *sql.DB, devId string, updateData SensorData) error {
 	var setValues []string
 	var params []interface{}
@@ -209,19 +260,18 @@ func UpdateDeviceData(db *sql.DB, devId string, updateData SensorData) error {
 		params = append(params, updateData.CurPres)
 	}
 
-	// 如果没有要更新的字段，则直接返回
 	if len(setValues) == 0 {
 		return fmt.Errorf("no fields to update")
 	}
 
-	// 构建 SET 子句
+	//build set
 	setClause := "SET " + strings.Join(setValues, ", ")
 
-	// 构建 UPDATE 语句
+	//build update
 	query := "UPDATE device " + setClause + " WHERE dev_id = ?"
 	params = append(params, devId)
 
-	// 执行更新操作
+	//exec update
 	_, err := db.Exec(query, params...)
 	if err != nil {
 		return err
