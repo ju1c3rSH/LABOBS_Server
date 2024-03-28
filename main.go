@@ -54,7 +54,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", indexHandler)
 	mux.HandleFunc("/add_devices", addHandler)
-	mux.HandleFunc("/update_data", updateData)
+	mux.HandleFunc("/UpdateData", updateData)
 	mux.HandleFunc("/GetDeviceHistoryStatus", gdhsHandler)
 	fmt.Printf("Server listening on port %d...\n", port)
 	err = http.ListenAndServe(":"+strconv.Itoa(port), mux)
@@ -243,7 +243,7 @@ func updateData(w http.ResponseWriter, r *http.Request) {
 		w.Write(jsonResponse)
 		return
 	}
-
+	fmt.Println(sensorData)
 	db, err := sql.Open("mysql", "csgo:213q456qwe@tcp(sincos.icu:22205)/csgo")
 	if err != nil {
 		errorResponse := map[string]interface{}{
@@ -269,18 +269,6 @@ func updateData(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = UpdateDeviceData(db, devId, sensorData)
-	if err != nil {
-		errorResponse := map[string]interface{}{
-			"msg":    "Failed to update device data: " + err.Error(),
-			"status": 500,
-		}
-		jsonResponse, _ := json.Marshal(errorResponse)
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write(jsonResponse)
-		return
-	}
 	err = UpdateSensorData(db, devId, sensorData)
 	if err != nil {
 		errorResponse := map[string]interface{}{
@@ -296,7 +284,7 @@ func updateData(w http.ResponseWriter, r *http.Request) {
 
 	successResponse := map[string]interface{}{
 		"status": "200",
-		"msg":    err.Error(),
+		"msg":    "Update Data Successful",
 	}
 	jsonResponse, _ := json.Marshal(successResponse)
 	w.Header().Set("Content-Type", "application/json")
