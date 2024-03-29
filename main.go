@@ -54,7 +54,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", indexHandler)
 	mux.HandleFunc("/add_devices", addHandler)
-	mux.HandleFunc("/UpdateData", updateData)
+	mux.HandleFunc("/update_data", updateData)
 	mux.HandleFunc("/GetDeviceHistoryStatus", gdhsHandler)
 	fmt.Printf("Server listening on port %d...\n", port)
 	err = http.ListenAndServe(":"+strconv.Itoa(port), mux)
@@ -218,9 +218,11 @@ func updateData(w http.ResponseWriter, r *http.Request) {
 
 	devId := r.Form.Get("dev_id")
 	ComprehensiveData := r.Form.Get("SensorsJson")
+	fmt.Println(ComprehensiveData)
+	fmt.Println(devId)
 	if devId == "" || ComprehensiveData == "" {
 		errorResponse := map[string]interface{}{
-			"msg":    "Please provide dev_id and SensorsJson!",
+			"msg":    "please post some data",
 			"status": 400,
 		}
 		jsonResponse, _ := json.Marshal(errorResponse)
@@ -229,7 +231,7 @@ func updateData(w http.ResponseWriter, r *http.Request) {
 		w.Write(jsonResponse)
 		return
 	}
-
+	fmt.Println(ComprehensiveData)
 	var sensorData SensorData
 	err = json.Unmarshal([]byte(ComprehensiveData), &sensorData)
 	if err != nil {
@@ -243,7 +245,7 @@ func updateData(w http.ResponseWriter, r *http.Request) {
 		w.Write(jsonResponse)
 		return
 	}
-	fmt.Println(sensorData)
+	fmt.Println("sd", sensorData.CurTemp)
 	db, err := sql.Open("mysql", "csgo:213q456qwe@tcp(sincos.icu:22205)/csgo")
 	if err != nil {
 		errorResponse := map[string]interface{}{
@@ -257,7 +259,7 @@ func updateData(w http.ResponseWriter, r *http.Request) {
 	}
 	defer db.Close()
 
-	if !ValueExists(db, "device", "dev_id", devId) {
+	if !ValueExists(db, "device", "unique_id", devId) {
 		errorResponse := map[string]interface{}{
 			"msg":    "Device not found",
 			"status": 404,
@@ -267,6 +269,8 @@ func updateData(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		w.Write(jsonResponse)
 		return
+	} else {
+		fmt.Println("value ok")
 	}
 
 	err = UpdateSensorData(db, devId, sensorData)
@@ -284,46 +288,64 @@ func updateData(w http.ResponseWriter, r *http.Request) {
 
 	successResponse := map[string]interface{}{
 		"status": "200",
-		"msg":    "Update Data Successful",
+		"msg":    "hi",
 	}
 	jsonResponse, _ := json.Marshal(successResponse)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(jsonResponse)
 }
-func UpdateSensorData(db *sql.DB, devId string, updateData SensorData) error {
-	var setValues []string
-	var params []interface{}
 
+//	type SensorData struct {
+//		ID         int
+//		DevID      string
+//		CurBattery int
+//		CurTemp    int
+//		CurAttd    int
+//		CurPres    int
+//		UpdateTime string
+//	}
+func UpdateSensorData(db *sql.DB, devId string, updateData SensorData) error {
+	var setColumns []string
+	var placeholders []string
+	var params []interface{}
+	fmt.Println("UpdateSensorData: ", updateData)
+	if devId != "" {
+		setColumns = append(setColumns, "dev_id")
+		placeholders = append(placeholders, "?")
+		params = append(params, devId)
+	}
 	if updateData.CurBattery != 0 {
-		setValues = append(setValues, "battery = ?")
+		setColumns = append(setColumns, "battery")
+		placeholders = append(placeholders, "?")
 		params = append(params, updateData.CurBattery)
 	}
 	if updateData.CurTemp != 0 {
-		setValues = append(setValues, "temp = ?")
+		setColumns = append(setColumns, "temp")
+		placeholders = append(placeholders, "?")
 		params = append(params, updateData.CurTemp)
 	}
 	if updateData.CurAttd != 0 {
-		setValues = append(setValues, "attd = ?")
+		setColumns = append(setColumns, "attd")
+		placeholders = append(placeholders, "?")
 		params = append(params, updateData.CurAttd)
 	}
 	if updateData.CurPres != 0 {
-		setValues = append(setValues, "pres = ?")
+		setColumns = append(setColumns, "pres")
+		placeholders = append(placeholders, "?")
 		params = append(params, updateData.CurPres)
 	}
 
-	if len(setValues) == 0 {
+	if len(setColumns) == 0 {
 		return fmt.Errorf("no fields to update")
 	}
 
-	//build set
-	setClause := "SET " + strings.Join(setValues, ", ")
+	//build query
+	columnClause := "(" + strings.Join(setColumns, ", ") + ")"
+	placeholderClause := "VALUES (" + strings.Join(placeholders, ", ") + ")"
+	query := "INSERT INTO sensor_data " + columnClause + " " + placeholderClause
 
-	//build update
-	query := "UPDATE sensor_data " + setClause + " WHERE dev_id = ?"
-	params = append(params, devId)
-
-	//exec update
+	//exe query
 	_, err := db.Exec(query, params...)
 	if err != nil {
 		return err
@@ -331,6 +353,7 @@ func UpdateSensorData(db *sql.DB, devId string, updateData SensorData) error {
 
 	return nil
 }
+
 func UpdateDeviceData(db *sql.DB, devId string, updateData SensorData) error {
 	var setValues []string
 	var params []interface{}
