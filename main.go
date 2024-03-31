@@ -26,13 +26,17 @@ type Device struct {
 }
 
 type SensorData struct {
-	ID         int
-	DevID      string
-	CurBattery int
-	CurTemp    int
-	CurAttd    int
-	CurPres    int
-	UpdateTime string
+	ID            int
+	DevID         string
+	Battery       int
+	Temp          int
+	Cttd          int
+	Pres          int
+	UpdateTime    string
+	Methane       float32
+	LPG           float32
+	Smoke         float32
+	Poisonous_Gas float32
 }
 
 type testData struct {
@@ -156,7 +160,7 @@ func gdhsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer db.Close()
-	query := fmt.Sprintf("SELECT * FROM sensor_data WHERE dev_id = ? LIMIT %d", exceptRowsInt)
+	query := fmt.Sprintf("SELECT * FROM sensor_data WHERE dev_id = ? ORDER BY id DESC LIMIT %d;\n", exceptRowsInt)
 	rows, err := db.Query(query, devId)
 	if err != nil {
 		errorResponse := map[string]interface{}{
@@ -179,16 +183,24 @@ func gdhsHandler(w http.ResponseWriter, r *http.Request) {
 		var attd int
 		var pres int
 		var recordedTime string
-		if err := rows.Scan(&id, &dev_id, &battery, &temp, &attd, &pres, &recordedTime); err != nil {
+		var methane float32
+		var poisonous_gas_ppm float32
+		var lpg float32
+		var smoke float32
+		if err := rows.Scan(&id, &dev_id, &battery, &temp, &attd, &pres, &recordedTime, &methane, &poisonous_gas_ppm, &lpg, &smoke); err != nil {
 			fmt.Println("Error scanning row:", err)
 			continue
 		}
 		var data SensorData
 		data.ID = id
-		data.CurAttd = attd
-		data.CurBattery = battery
-		data.CurTemp = temp
-		data.CurPres = pres
+		data.Cttd = attd
+		data.Battery = battery
+		data.Temp = temp
+		data.Pres = pres
+		data.LPG = lpg
+		data.Methane = methane
+		data.Poisonous_Gas = poisonous_gas_ppm
+		data.Smoke = smoke
 		//data.UpdateTime = int(time.Now().UnixNano() / 1e6)
 		data.UpdateTime = recordedTime
 
