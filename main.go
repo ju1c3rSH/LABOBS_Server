@@ -35,6 +35,17 @@ type SensorData struct {
 	UpdateTime string
 }
 
+type testData struct {
+	CurBattery         float64
+	CurTemp            float64
+	CurAttd            float64
+	CurPres            float64
+	CurMethane         float64
+	CurLPG             float64
+	CurSmoke           float64
+	CurPoisonousGasPPM float64
+}
+
 func main() {
 
 	//initDB()
@@ -218,9 +229,9 @@ func updateData(w http.ResponseWriter, r *http.Request) {
 
 	devId := r.Form.Get("dev_id")
 	ComprehensiveData := r.Form.Get("SensorsJson")
-	fmt.Println(ComprehensiveData)
-	fmt.Println(devId)
+
 	if devId == "" || ComprehensiveData == "" {
+		fmt.Println("please post some data")
 		errorResponse := map[string]interface{}{
 			"msg":    "please post some data",
 			"status": 400,
@@ -231,10 +242,15 @@ func updateData(w http.ResponseWriter, r *http.Request) {
 		w.Write(jsonResponse)
 		return
 	}
-	fmt.Println(ComprehensiveData)
-	var sensorData SensorData
+	fmt.Println("ComprehensiveData: ", ComprehensiveData)
+	fmt.Println("devId: ", devId)
+	//fmt.Println(ComprehensiveData)
+	//var sensorData SensorData
+	var sensorData testData
 	err = json.Unmarshal([]byte(ComprehensiveData), &sensorData)
+
 	if err != nil {
+		fmt.Println("Unmarshall: ", err.Error())
 		errorResponse := map[string]interface{}{
 			"msg":    "Failed to parse SensorsJson: " + err.Error(),
 			"status": 402,
@@ -245,6 +261,16 @@ func updateData(w http.ResponseWriter, r *http.Request) {
 		w.Write(jsonResponse)
 		return
 	}
+
+	//ComprehensiveData:  {'CurBattery': 100, 'CurTemp': 27.3944, 'CurPres': 100351.6, 'CurAttd': 77.12587}
+	//devId:  zl3UOtVP
+	//	invalid character '\'' looking for beginning of object key string
+	//ComprehensiveData:  { "ID": 123, "DevID": "BE120de2", "CurBattery": 75, "CurTemp": 25, "CurAttd": 50, "CurPres": 1013, "UpdateTime": "2024-03-28T12:00:00Z" }
+	//devId:  zl3UOtVP
+	//	sd 25
+	//	value ok
+	//UpdateSensorData:  {123 BE120de2 75 25 50 1013 2024-03-28T12:00:00Z}
+
 	fmt.Println("sd", sensorData.CurTemp)
 	db, err := sql.Open("mysql", "csgo:213q456qwe@tcp(sincos.icu:22205)/csgo")
 	if err != nil {
@@ -264,6 +290,7 @@ func updateData(w http.ResponseWriter, r *http.Request) {
 			"msg":    "Device not found",
 			"status": 404,
 		}
+		fmt.Println("Device not found")
 		jsonResponse, _ := json.Marshal(errorResponse)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
@@ -276,7 +303,7 @@ func updateData(w http.ResponseWriter, r *http.Request) {
 	err = UpdateSensorData(db, devId, sensorData)
 	if err != nil {
 		errorResponse := map[string]interface{}{
-			"msg":    "Failed to update device data: " + err.Error(),
+			"msg":    "Failed to update sensor data: " + err.Error(),
 			"status": 500,
 		}
 		jsonResponse, _ := json.Marshal(errorResponse)
@@ -286,6 +313,19 @@ func updateData(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = UpdateDeviceData(db, devId, sensorData)
+	if err != nil {
+		errorResponse := map[string]interface{}{
+			"msg":    "Failed to update device data: " + err.Error(),
+			"status": 500,
+		}
+		fmt.Println(err)
+		jsonResponse, _ := json.Marshal(errorResponse)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(jsonResponse)
+		return
+	}
 	successResponse := map[string]interface{}{
 		"status": "200",
 		"msg":    "hi",
@@ -305,7 +345,7 @@ func updateData(w http.ResponseWriter, r *http.Request) {
 //		CurPres    int
 //		UpdateTime string
 //	}
-func UpdateSensorData(db *sql.DB, devId string, updateData SensorData) error {
+func UpdateSensorData(db *sql.DB, devId string, updateData testData) error {
 	var setColumns []string
 	var placeholders []string
 	var params []interface{}
@@ -319,6 +359,26 @@ func UpdateSensorData(db *sql.DB, devId string, updateData SensorData) error {
 		setColumns = append(setColumns, "battery")
 		placeholders = append(placeholders, "?")
 		params = append(params, updateData.CurBattery)
+	}
+	if updateData.CurLPG != 0 {
+		setColumns = append(setColumns, "lpg")
+		placeholders = append(placeholders, "?")
+		params = append(params, updateData.CurLPG)
+	}
+	if updateData.CurMethane != 0 {
+		setColumns = append(setColumns, "methane")
+		placeholders = append(placeholders, "?")
+		params = append(params, updateData.CurMethane)
+	}
+	if updateData.CurPoisonousGasPPM != 0 {
+		setColumns = append(setColumns, "poisonous_gas_ppm")
+		placeholders = append(placeholders, "?")
+		params = append(params, updateData.CurPoisonousGasPPM)
+	}
+	if updateData.CurSmoke != 0 {
+		setColumns = append(setColumns, "smoke")
+		placeholders = append(placeholders, "?")
+		params = append(params, updateData.CurSmoke)
 	}
 	if updateData.CurTemp != 0 {
 		setColumns = append(setColumns, "temp")
@@ -353,44 +413,63 @@ func UpdateSensorData(db *sql.DB, devId string, updateData SensorData) error {
 
 	return nil
 }
-
-func UpdateDeviceData(db *sql.DB, devId string, updateData SensorData) error {
-	var setValues []string
+func UpdateDeviceData(db *sql.DB, devId string, updateData testData) error {
+	var setColumns []string
 	var params []interface{}
 
+	// Check if device ID is provided
+	if devId == "" {
+		return fmt.Errorf("device ID is required")
+	}
+
+	// Check and add update data to setColumns and params
 	if updateData.CurBattery != 0 {
-		setValues = append(setValues, "cur_battery = ?")
+		setColumns = append(setColumns, "cur_battery = ?")
 		params = append(params, updateData.CurBattery)
 	}
+	if updateData.CurLPG != 0 {
+		setColumns = append(setColumns, "cur_lpg = ?")
+		params = append(params, updateData.CurLPG)
+	}
+	if updateData.CurMethane != 0 {
+		setColumns = append(setColumns, "cur_methane = ?")
+		params = append(params, updateData.CurMethane)
+	}
+	if updateData.CurPoisonousGasPPM != 0 {
+		setColumns = append(setColumns, "cur_poisonous_gas_ppm = ?")
+		params = append(params, updateData.CurPoisonousGasPPM)
+	}
+	if updateData.CurSmoke != 0 {
+		setColumns = append(setColumns, "cur_smoke = ?")
+		params = append(params, updateData.CurSmoke)
+	}
 	if updateData.CurTemp != 0 {
-		setValues = append(setValues, "cur_temp = ?")
+		setColumns = append(setColumns, "cur_temp = ?")
 		params = append(params, updateData.CurTemp)
 	}
 	if updateData.CurAttd != 0 {
-		setValues = append(setValues, "cur_attd = ?")
+		setColumns = append(setColumns, "cur_attd = ?")
 		params = append(params, updateData.CurAttd)
 	}
 	if updateData.CurPres != 0 {
-		setValues = append(setValues, "cur_pres = ?")
+		setColumns = append(setColumns, "cur_pres = ?")
 		params = append(params, updateData.CurPres)
 	}
 
-	if len(setValues) == 0 {
+	// Check if there are fields to update
+	if len(setColumns) == 0 {
 		return fmt.Errorf("no fields to update")
 	}
 
-	//build set
-	setClause := "SET " + strings.Join(setValues, ", ")
+	// Construct the SQL query
+	setClause := strings.Join(setColumns, ", ")
+	query := "UPDATE device SET " + setClause + " WHERE unique_id = ?"
 
-	//build update
-	query := "UPDATE device " + setClause + " WHERE dev_id = ?"
+	// Add device ID to params
 	params = append(params, devId)
 
-	//exec update
+	// Execute the update query
 	_, err := db.Exec(query, params...)
-	if err != nil {
-		return err
-	}
 	if err != nil {
 		return err
 	}
