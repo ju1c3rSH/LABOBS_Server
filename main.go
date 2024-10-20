@@ -284,7 +284,7 @@ func updateData(w http.ResponseWriter, r *http.Request) {
 	//UpdateSensorData:  {123 BE120de2 75 25 50 1013 2024-03-28T12:00:00Z}
 
 	fmt.Println("sd", sensorData.CurTemp)
-	db, err := sql.Open("mysql", "csgo:213q456qwe@tcp(sincos.icu:22205)/csgo")
+	db, err := sql.Open("mysql", "")
 	if err != nil {
 		errorResponse := map[string]interface{}{
 			"error": "Failed to connect to database",
