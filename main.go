@@ -148,7 +148,7 @@ func gdhsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Print(exceptRowsInt)
 
-	db, err := sql.Open("mysql", "csgo:213q456qwe@tcp(sincos.icu:22205)/csgo")
+	db, err := sql.Open("mysql", ")")//这里是mysql服务器，需要补全
 	if err != nil {
 		errorResponse := map[string]interface{}{
 			"error": "Failed to connect to database",
