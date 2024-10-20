@@ -53,7 +53,7 @@ type testData struct {
 func main() {
 
 	//initDB()
-	db, err := sql.Open("mysql", "csgo:213q456qwe@tcp(sincos.icu:22205)/csgo")
+	db, err := sql.Open("mysql", "")
 	if err != nil {
 		log.Fatal(err)
 	}
